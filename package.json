@@ -9,7 +9,7 @@
     "build": "node tools/build-site.mjs",
     "build:template": "python3 tools/build_template.py",
     "update:catalog": "node tools/update-catalog.mjs",
-    "test": "node --test tests/",
+    "test": "node --test",
     "sample": "node tools/render-sample.mjs",
     "serve": "python3 -m http.server 8080 --directory dist"
   },
