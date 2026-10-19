@@ -149,6 +149,8 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
 .teacher-suggest[hidden], .group-info[hidden] { display: none; }
 .group-info p { margin: 0; font-size: 0.9375rem; }
 .group-info button { justify-self: start; padding: 6px 14px; }
+.period { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 0.875rem; }
+.period select { width: auto; padding: 4px 26px 4px 8px; }
 .teacher-suggest, .group-info {
   display: grid;
   gap: 8px;

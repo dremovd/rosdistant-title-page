@@ -2,7 +2,7 @@ import { renderTitle } from "./lib/docx.js";
 import {
   fileNameFor, isValidYear, normalizeName, plural, programKey, templateData, toGuillemets, toInitials, validate,
 } from "./lib/format.js";
-import { currentPeriod, findGroup, inferFromGroup, planDisciplines } from "./lib/group.js";
+import { currentPeriod, findGroup, inferFromGroup, planCourses, planDisciplines } from "./lib/group.js";
 import { clearState, loadState, saveState } from "./lib/storage.js";
 
 const $ = (id) => document.getElementById(id);
@@ -333,7 +333,7 @@ function renderGroupInfo(applied) {
     link.rel = "noopener noreferrer";
     link.textContent = "учебному плану";
     const form = [plan.form.toLowerCase(), plan.distance ? "дистанционно" : ""].filter(Boolean).join(", ");
-    note.append(`Определено по `, link, ` (${form}; сейчас ${currentPeriod(plan).label}) — проверьте.`);
+    note.append(`Определено по `, link, ` (${form}) — проверьте.`);
   } else if (!n) {
     note.textContent = "Направление по номеру группы не определилось — выберите программу ниже.";
   } else if (n === 1) {
@@ -343,8 +343,9 @@ function renderGroupInfo(applied) {
   } else {
     note.textContent = `Номер группы подходит к нескольким направлениям (${groupMatch.directions.join("; ")}) — выберите своё ниже.`;
   }
-  if (!groupMatch.known) note.textContent += " Группы нет в расписании ТГУ, институт подобран по буквам.";
+  if (!groupMatch.known) note.append(" Группы нет в расписании ТГУ, институт подобран по буквам.");
   box.append(note);
+  if (plan) box.append(periodPicker(plan));
 
   if ((n || plan) && !applied && !state.pick.byGroup) {
     const button = document.createElement("button");
@@ -353,6 +354,46 @@ function renderGroupInfo(applied) {
     button.addEventListener("click", () => applyGroup(true));
     box.append(button);
   }
+}
+
+// Курс и семестр, заданные пользователем для своей группы (запоминаются).
+function periodOverride() {
+  const saved = state.period;
+  return saved && groupMatch && saved.group === groupMatch.name ? saved : null;
+}
+
+function periodPicker(plan) {
+  const now = currentPeriod(plan, new Date(), periodOverride());
+  const wrap = document.createElement("div");
+  wrap.className = "period";
+  const label = document.createElement("span");
+  label.textContent = "Сейчас:";
+  const courseSelect = document.createElement("select");
+  courseSelect.setAttribute("aria-label", "Курс");
+  for (let c = 1; c <= Math.max(planCourses(plan), now.course); c++) {
+    courseSelect.append(option(String(c), `${c}-й курс`, c === now.course));
+  }
+  const semesterSelect = document.createElement("select");
+  semesterSelect.setAttribute("aria-label", "Семестр");
+  const fillSemesters = (course, selected) => {
+    semesterSelect.replaceChildren(...[course * 2 - 1, course * 2].map((s) => option(String(s), `${s}-й семестр`, s === selected)));
+  };
+  fillSemesters(now.course, now.semester);
+  const save = () => {
+    state.period = { group: groupMatch.name, course: Number(courseSelect.value), semester: Number(semesterSelect.value) };
+    renderGroupInfo(true);
+    changed();
+  };
+  courseSelect.addEventListener("change", () => {
+    fillSemesters(Number(courseSelect.value), Number(courseSelect.value) * 2 - 1);
+    save();
+  });
+  semesterSelect.addEventListener("change", save);
+  const hint = document.createElement("span");
+  hint.className = "muted";
+  hint.textContent = periodOverride() ? "задано вами" : "по году набора — исправьте, если не так";
+  wrap.append(label, courseSelect, semesterSelect, hint);
+  return wrap;
 }
 
 function fillGroupList() {
@@ -366,7 +407,7 @@ function fillCourseSuggest() {
   const box = $("course-suggest");
   box.replaceChildren();
   const plan = groupMatch?.plan;
-  const current = plan ? planDisciplines(plan).current : [];
+  const current = plan ? planDisciplines(plan, new Date(), periodOverride()).current : [];
   if (!current.length) {
     box.hidden = true;
     return;
@@ -374,7 +415,7 @@ function fillCourseSuggest() {
   box.hidden = false;
   const title = document.createElement("p");
   title.className = "hint";
-  title.textContent = `По учебному плану группы ${groupMatch.name} на ${currentPeriod(plan).label}:`;
+  title.textContent = `По учебному плану группы ${groupMatch.name} на ${currentPeriod(plan, new Date(), periodOverride()).label}:`;
   const list = document.createElement("div");
   list.className = "chips";
   const course = normalizeName(value("course"));
@@ -395,7 +436,8 @@ function fillCourseSuggest() {
 
 function fillCourseList() {
   const plan = groupMatch?.plan;
-  const fromPlan = plan ? [...planDisciplines(plan).current, ...planDisciplines(plan).other] : [];
+  const split = plan ? planDisciplines(plan, new Date(), periodOverride()) : null;
+  const fromPlan = split ? [...split.current, ...split.other] : [];
   const fromCatalog = catalog?.disciplines?.[state.pick.programId] ?? [];
   const list = [...new Set([...fromPlan, ...fromCatalog])];
   $("course-list").replaceChildren(...list.map((d) => option(d, "")));
@@ -566,7 +608,9 @@ function persist() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     const fields = Object.fromEntries(TEXT_FIELDS.map((k) => [k, value(k)]));
-    const ok = saveState({ pick: state.pick, auto: state.auto, teachers: state.teachers, fields, pageBreak: $("page-break").checked });
+    const ok = saveState({
+      pick: state.pick, auto: state.auto, teachers: state.teachers, period: state.period, fields, pageBreak: $("page-break").checked,
+    });
     $("save-status").textContent = ok
       ? "Данные сохранены только в этом браузере на этом устройстве."
       : "Браузер не разрешает сохранять данные (например, приватный режим) — после закрытия вкладки они пропадут.";
@@ -582,6 +626,7 @@ function restore() {
   state.pick = { instituteId: "", departmentId: "", programId: "", ...saved.pick };
   state.auto = saved.auto ?? {};
   state.teachers = Array.isArray(saved.teachers) ? saved.teachers.slice(0, MAX_TEACHERS) : [];
+  state.period = saved.period ?? null;
   for (const key of TEXT_FIELDS) setValue(key, saved.fields?.[key] ?? "");
   // Год из прошлого учебного года не переносим.
   const year = saved.fields?.year;

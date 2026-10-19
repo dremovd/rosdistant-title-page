@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  currentPeriod, findGroup, groupKey, inferFromGroup, matchPlan, normalizeGroup, parseGroup, planDisciplines, scoreDirection,
+  currentPeriod, findGroup, planCourses, groupKey, inferFromGroup, matchPlan, normalizeGroup, parseGroup, planDisciplines, scoreDirection,
 } from "../src/lib/group.js";
 
 const catalog = {
@@ -125,4 +125,14 @@ test("matchPlan: план чужого направления с тем же н�
   const r = matchPlan(parseGroup("ЮРмп-2507а"), mixed, "law");
   assert.equal(r.plan.id, "z40.04.01_07_do1_2025_3++");
   assert.equal(matchPlan(parseGroup("ЮРмп-2507а"), [mixed[0]], "law").plan, null);
+});
+
+test("курс и семестр можно задать вручную (сдвиг у Росдистанта)", () => {
+  const oct2026 = new Date(2026, 9, 20);
+  const p = plan({ periodUnit: "course" });
+  assert.equal(currentPeriod(p, oct2026).course, 3);
+  const override = { group: "ПИНЖбд-2401а", course: 2, semester: 4 };
+  assert.deepEqual([currentPeriod(p, oct2026, override).course, currentPeriod(p, oct2026, override).semester], [2, 4]);
+  assert.deepEqual(planDisciplines(p, oct2026, override).current, ["Проблемы семейного права"]);
+  assert.equal(planCourses(p), 3);
 });

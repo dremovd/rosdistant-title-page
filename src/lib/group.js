@@ -118,20 +118,32 @@ export function matchPlan(parsed, plans, instituteId) {
   return { plan: variants.size === 1 ? list[0] : null, candidates: list };
 }
 
-// Текущий курс и семестр по году набора. Учебный год начинается 1 сентября.
-export function currentPeriod(plan, date = new Date()) {
+// Последний курс плана: для заочной формы номера в плане — курсы, иначе — семестры.
+export function planCourses(plan) {
+  const max = Math.max(1, ...plan.disciplines.flatMap(([, periods]) => periods));
+  return plan.periodUnit === "course" ? max : Math.ceil(max / 2);
+}
+
+// Текущий курс и семестр по году набора (учебный год с 1 сентября).
+// У Росдистанта отсчёт бывает сдвинут относительно года набора (весенний старт),
+// поэтому пользователь может задать курс и семестр сам — override.
+export function currentPeriod(plan, date = new Date(), override = null) {
   const month = date.getMonth();
   const startYear = month >= 8 ? date.getFullYear() : date.getFullYear() - 1;
-  const course = startYear - plan.year + 1;
-  const semester = (course - 1) * 2 + (month >= 8 || month === 0 ? 1 : 2);
+  let course = startYear - plan.year + 1;
+  let semester = (course - 1) * 2 + (month >= 8 || month === 0 ? 1 : 2);
+  if (override?.course) {
+    course = override.course;
+    semester = override.semester ?? (course - 1) * 2 + 1;
+  }
   return plan.periodUnit === "course"
     ? { course, semester, period: course, label: `${course}-й курс` }
     : { course, semester, period: semester, label: `${semester}-й семестр (${course}-й курс)` };
 }
 
 // Дисциплины плана: сначала текущего периода, затем остальные.
-export function planDisciplines(plan, date = new Date()) {
-  const { period } = currentPeriod(plan, date);
+export function planDisciplines(plan, date = new Date(), override = null) {
+  const { period } = currentPeriod(plan, date, override);
   const current = plan.disciplines.filter(([, periods]) => periods.includes(period)).map(([name]) => name);
   const other = plan.disciplines.map(([name]) => name).filter((name) => !current.includes(name));
   return { current, other };
