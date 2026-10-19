@@ -9,28 +9,87 @@
 import { normalizeName } from "./format.js";
 
 const GROUP_RE = /^([А-ЯЁ][А-ЯЁ0-9]*?)(спо|[бмса])([а-яё]*)-(\d{2})(\d{2})([а-яё]?)$/u;
+// Хвост номера без префикса, в нижнем регистре и без дефиса: «мд2411а».
+const TAIL_RE = /^(спо|[бмса])([а-яё]*)(\d{2})(\d{2})([а-яё]?)$/u;
 const LEVELS = { б: "Бакалавриат", м: "Магистратура", с: "Специалитет", а: "Аспирантура", спо: "СПО" };
 const STOP_WORDS = new Set(["и", "в", "по", "для", "с", "на"]);
+
+// Ключ для сравнения: без пробелов и дефисов, в нижнем регистре, ё → е.
+export function groupKey(value) {
+  return String(value ?? "").toLocaleLowerCase("ru").replace(/ё/g, "е").replace(/[\s\-‐-―−_]+/g, "");
+}
 
 export function normalizeGroup(value) {
   return String(value ?? "").replace(/\s+/g, "").replace(/[‐-―−]/g, "-");
 }
 
-export function parseGroup(value) {
-  const name = normalizeGroup(value);
-  const m = name.match(GROUP_RE);
-  if (!m) return null;
-  const flags = m[3];
+// Префиксы известных групп («ЮР», «ПСХ», «ПО2») — чтобы разобрать номер, набранный
+// без заглавных букв: в «псхмвд2404а» иначе не понять, где кончается префикс.
+const prefixCache = new WeakMap();
+export function knownPrefixes(groups) {
+  if (!groups?.groups) return [];
+  if (!prefixCache.has(groups)) {
+    const set = new Set();
+    for (const [name] of groups.groups) {
+      const m = name.match(GROUP_RE);
+      if (m) set.add(m[1]);
+    }
+    prefixCache.set(groups, [...set].sort((a, b) => b.length - a.length));
+  }
+  return prefixCache.get(groups);
+}
+
+// Номер группы из снапшота с тем же ключом: «юрмд2411а» → «ЮРмд-2411а».
+export function findGroup(value, groups) {
+  const key = groupKey(value);
+  return key ? groups?.groups.find(([name]) => groupKey(name) === key) ?? null : null;
+}
+
+function fromParts(prefix, level, flags, yy, nn, sub) {
   return {
-    name,
-    prefix: m[1],
-    level: LEVELS[m[2]],
-    year: 2000 + Number(m[4]),
-    number: m[5],
+    name: `${prefix}${level}${flags}-${yy}${nn}${sub}`,
+    prefix,
+    level: LEVELS[level],
+    year: 2000 + Number(yy),
+    number: nn,
     distance: flags.includes("д"),
     // Буква формы в имени плана: v — очно-заочная, z — заочная, "" — очная.
     formLetter: flags.includes("в") ? "v" : /[дп]/.test(flags) ? "z" : "",
   };
+}
+
+/**
+ * Разбор номера группы в любом регистре, с дефисом или без.
+ * Префикс: из списка известных групп, иначе — заглавные буквы ввода,
+ * иначе — самый короткий вариант, при котором остаток похож на номер.
+ */
+export function parseGroup(value, groups = null) {
+  const record = findGroup(value, groups);
+  const exact = normalizeGroup(record?.[0] ?? value).match(GROUP_RE);
+  if (exact) return fromParts(exact[1], exact[2], exact[3], exact[4], exact[5], exact[6]);
+
+  const key = groupKey(value);
+  const tryPrefix = (prefix) => {
+    if (!prefix || !key.startsWith(prefix.toLocaleLowerCase("ru"))) return null;
+    const m = key.slice(prefix.length).match(TAIL_RE);
+    return m ? fromParts(prefix.toLocaleUpperCase("ru"), m[1], m[2], m[3], m[4], m[5]) : null;
+  };
+  for (const prefix of knownPrefixes(groups)) {
+    const parsed = tryPrefix(prefix);
+    if (parsed) return parsed;
+  }
+  const upper = normalizeGroup(value).match(/^[А-ЯЁ][А-ЯЁ0-9]+/u)?.[0];
+  if (upper) {
+    for (let len = upper.length; len >= 1; len--) {
+      const parsed = tryPrefix(upper.slice(0, len));
+      if (parsed) return parsed;
+    }
+  }
+  for (let len = 2; len <= Math.min(5, key.length); len++) {
+    const parsed = tryPrefix(key.slice(0, len));
+    if (parsed) return parsed;
+  }
+  return null;
 }
 
 // Учебный план группы: тот же год набора, номер, уровень и институт; затем —
@@ -110,9 +169,9 @@ export function scoreDirection(prefix, direction) {
  * @returns {null | {name, known, instituteId, level, year, plan, programs, departmentIds, directions}}
  */
 export function inferFromGroup(value, catalog, groups, plans = null) {
-  const parsed = parseGroup(value);
+  const parsed = parseGroup(value, groups);
   if (!parsed || !catalog) return null;
-  const record = groups?.groups.find(([name]) => name.toLowerCase() === parsed.name.toLowerCase());
+  const record = findGroup(parsed.name, groups);
   const instituteId = record?.[1] ?? null;
   const eduform = record?.[2] ?? null;
 

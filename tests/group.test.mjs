@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  currentPeriod, inferFromGroup, matchPlan, normalizeGroup, parseGroup, planDisciplines, scoreDirection,
+  currentPeriod, findGroup, groupKey, inferFromGroup, matchPlan, normalizeGroup, parseGroup, planDisciplines, scoreDirection,
 } from "../src/lib/group.js";
 
 const catalog = {
@@ -94,4 +94,24 @@ test("currentPeriod и planDisciplines: курс заочной формы", () 
   assert.deepEqual(planDisciplines(plan(), oct2026).current, ["Причинение вреда"]);
   const sem = currentPeriod(plan({ periodUnit: "semester" }), new Date(2027, 2, 1));
   assert.deepEqual([sem.course, sem.semester], [3, 6]);
+});
+
+test("группа без дефиса и в любом регистре", () => {
+  const known = { groups: [["ЮРмд-2411а", "law", 2], ["ПСХмвд-2404а", "hum", 2], ["ПО2б-2405а", "hum", 1]] };
+  for (const typed of ["юрмд2411а", "ЮРМД2411А", "юрмд-2411а", " ЮРмд 2411а ", "ЮРмд–2411а"]) {
+    assert.equal(parseGroup(typed, known).name, "ЮРмд-2411а", typed);
+    assert.equal(findGroup(typed, known)?.[0], "ЮРмд-2411а", typed);
+  }
+  assert.equal(parseGroup("псхмвд2404а", known).name, "ПСХмвд-2404а");
+  assert.equal(parseGroup("по2б2405а", known).prefix, "ПО2");
+  // Группы нет в списке: префикс по заглавным буквам или самый короткий подходящий.
+  assert.equal(parseGroup("ЭКБВД2601А", known).name, "ЭКбвд-2601а");
+  assert.equal(parseGroup("юрмд2611а", null).name, "ЮРмд-2611а");
+  assert.equal(groupKey("ЮРмд - 2411а"), "юрмд2411а");
+});
+
+test("inferFromGroup принимает номер в любом виде и возвращает каноничный", () => {
+  const r = inferFromGroup("юрмд2406а", catalog, groups);
+  assert.equal(r.name, "ЮРмд-2406а");
+  assert.equal(r.known, true);
 });

@@ -2,7 +2,7 @@ import { renderTitle } from "./lib/docx.js";
 import {
   fileNameFor, isValidYear, normalizeName, plural, programKey, templateData, toGuillemets, toInitials, validate,
 } from "./lib/format.js";
-import { currentPeriod, inferFromGroup, planDisciplines } from "./lib/group.js";
+import { currentPeriod, findGroup, inferFromGroup, planDisciplines } from "./lib/group.js";
 import { clearState, loadState, saveState } from "./lib/storage.js";
 
 const $ = (id) => document.getElementById(id);
@@ -275,6 +275,8 @@ function pickIsEmpty() {
 // не перезаписывается: тогда предлагается кнопка «Заполнить по группе».
 function applyGroup(force = false) {
   groupMatch = catalog ? inferFromGroup(value("group"), catalog, groupsData, plansData) : null;
+  // «юрмд2411а», «ЮРМД 2411А» → «ЮРмд-2411а»: так группа и печатается на листе.
+  if (groupMatch && value("group") !== groupMatch.name) setValue("group", groupMatch.name);
   const plan = groupMatch?.plan;
   const canApply = groupMatch && (plan || groupMatch.programs.length) && (force || pickIsEmpty() || state.pick.byGroup);
   if (canApply) {
@@ -710,8 +712,7 @@ function bind() {
   // Группа: при выборе из списка или уходе из поля; при точном совпадении — сразу.
   input("group").addEventListener("change", () => applyGroup());
   input("group").addEventListener("input", () => {
-    const typed = value("group").trim().toLowerCase();
-    if (groupsData?.groups.some(([name]) => name.toLowerCase() === typed)) applyGroup();
+    if (findGroup(value("group"), groupsData)) applyGroup();
   });
   input("studentFull").addEventListener("input", () => {
     suggest("student", toInitials(value("studentFull")));
