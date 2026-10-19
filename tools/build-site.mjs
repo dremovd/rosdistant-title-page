@@ -43,6 +43,7 @@ const minJson = (p) => JSON.stringify(JSON.parse(readFileSync(path(p), "utf8")))
 const catalog = minJson("data/catalog.json");
 const staff = minJson("data/staff.json");
 const groups = minJson("data/groups.json");
+const plans = minJson("data/plans.json");
 
 const files = {
   "%APP%": hashed("app", "js", js.outputFiles[0].contents),
@@ -52,6 +53,7 @@ const files = {
   "%BACKGROUND%": hashed("background", "jpg", background),
   "%STAFF%": hashed("staff", "json", staff),
   "%GROUPS%": hashed("groups", "json", groups),
+  "%PLANS%": hashed("plans", "json", plans),
 };
 
 let html = readFileSync(path("src/index.html"), "utf8");

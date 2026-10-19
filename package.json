@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "esbuild": "0.25.10",
-    "node-html-parser": "7.0.1"
+    "node-html-parser": "7.0.1",
+    "pdfjs-dist": "4.10.38"
   }
 }

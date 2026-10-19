@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { inferFromGroup, normalizeGroup, parseGroup, scoreDirection } from "../src/lib/group.js";
+import {
+  currentPeriod, inferFromGroup, matchPlan, normalizeGroup, parseGroup, planDisciplines, scoreDirection,
+} from "../src/lib/group.js";
 
 const catalog = {
   programs: [
@@ -15,7 +17,12 @@ const catalog = {
 const groups = { groups: [["ЮРмд-2406а", "law", 2], ["ПСХмвд-2404а", "hum", 2]] };
 
 test("parseGroup: уровень, префикс, год набора", () => {
-  assert.deepEqual(parseGroup("ЮРмд-2406а"), { name: "ЮРмд-2406а", prefix: "ЮР", level: "Магистратура", year: 2024 });
+  assert.deepEqual(parseGroup("ЮРмд-2406а"), {
+    name: "ЮРмд-2406а", prefix: "ЮР", level: "Магистратура", year: 2024, number: "06", distance: true, formLetter: "z",
+  });
+  assert.equal(parseGroup("ПСХмвд-2404а").formLetter, "v");
+  assert.equal(parseGroup("ЮРб-2402а").formLetter, "");
+  assert.equal(parseGroup("ЮРб-2402а").distance, false);
   assert.equal(parseGroup("ЮРспоп-2501а").level, "СПО");
   assert.equal(parseGroup("ПО2б-2405а").prefix, "ПО2");
   assert.equal(parseGroup(" ЮРмд – 2406а ").name, "ЮРмд-2406а");
@@ -50,4 +57,41 @@ test("inferFromGroup: неоднозначный префикс даёт нес�
   const r = inferFromGroup("ПСХмвд-2404а", catalog, groups);
   assert.deepEqual(r.directions.sort(), ["37.04.01 Психология", "44.04.02 Психолого-педагогическое образование"]);
   assert.equal(inferFromGroup("непонятно", catalog, groups), null);
+});
+
+const plan = (over) => ({
+  id: "z40.04.01_11_do1_2024_3++", code: "40.04.01", direction: "Юриспруденция", number: "11", year: 2024,
+  level: "Магистратура", formLetter: "z", distance: true, form: "Заочная", profile: "Гражданское право и процесс",
+  department: "Департамент частного права", institute: "ИнПр", instituteId: "law", periodUnit: "course",
+  disciplines: [["Проблемы деликтного права", [1]], ["Проблемы семейного права", [2]], ["Причинение вреда", [3]]],
+  ...over,
+});
+const plans = {
+  plans: [
+    plan(),
+    plan({ id: "z40.04.01_11_2024_3++", distance: false }),
+    plan({ id: "z40.04.01_09_do1_2024_3++", number: "09", profile: "Уголовное право и процесс", department: "Департамент публичного права" }),
+  ],
+};
+
+test("matchPlan: номер, год, дистанционность", () => {
+  assert.equal(matchPlan(parseGroup("ЮРмд-2411а"), plans.plans, "law").plan.id, "z40.04.01_11_do1_2024_3++");
+  assert.equal(matchPlan(parseGroup("ЮРмп-2411а"), plans.plans, "law").plan.id, "z40.04.01_11_2024_3++");
+  assert.equal(matchPlan(parseGroup("ЮРмд-2412а"), plans.plans, "law").plan, null);
+});
+
+test("inferFromGroup с планом: точная программа и кафедра", () => {
+  const withDep = { ...catalog, departments: [{ id: "civil", name: "Департамент частного права" }, { id: "public", name: "Департамент публичного права" }] };
+  const r = inferFromGroup("ЮРмд-2411а", withDep, groups, plans);
+  assert.equal(r.plan.profile, "Гражданское право и процесс");
+  assert.deepEqual(r.programs.map((p) => p.id), ["a"]);
+  assert.equal(r.department.id, "civil");
+});
+
+test("currentPeriod и planDisciplines: курс заочной формы", () => {
+  const oct2026 = new Date(2026, 9, 20);
+  assert.equal(currentPeriod(plan(), oct2026).course, 3);
+  assert.deepEqual(planDisciplines(plan(), oct2026).current, ["Причинение вреда"]);
+  const sem = currentPeriod(plan({ periodUnit: "semester" }), new Date(2027, 2, 1));
+  assert.deepEqual([sem.course, sem.semester], [3, 6]);
 });

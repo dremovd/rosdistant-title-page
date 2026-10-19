@@ -158,6 +158,7 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
 }
 .teacher-suggest .hint, .group-info .hint { color: var(--text); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
 .chip {
   border-radius: 999px;
   padding: 5px 12px;

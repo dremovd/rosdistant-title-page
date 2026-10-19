@@ -2,7 +2,7 @@ import { renderTitle } from "./lib/docx.js";
 import {
   fileNameFor, isValidYear, normalizeName, plural, programKey, templateData, toGuillemets, toInitials, validate,
 } from "./lib/format.js";
-import { inferFromGroup } from "./lib/group.js";
+import { currentPeriod, inferFromGroup, planDisciplines } from "./lib/group.js";
 import { clearState, loadState, saveState } from "./lib/storage.js";
 
 const $ = (id) => document.getElementById(id);
@@ -33,6 +33,7 @@ const assetUrl = (path) => new URL(path, document.baseURI);
 let catalog = null;
 let staff = null;
 let groupsData = null;
+let plansData = null;
 let groupMatch = null;
 let templatePromise = null;
 let attemptedDownload = false;
@@ -67,6 +68,12 @@ async function loadCatalog() {
 async function loadGroups() {
   const data = await loadJson(assets.groups);
   if (!Array.isArray(data.groups)) throw new Error("пустой список групп");
+  return data;
+}
+
+async function loadPlans() {
+  const data = await loadJson(assets.plans);
+  if (!Array.isArray(data.plans)) throw new Error("пустой список учебных планов");
   return data;
 }
 
@@ -267,18 +274,22 @@ function pickIsEmpty() {
 // Предварительно заполняет программу по группе. Ручной выбор пользователя
 // не перезаписывается: тогда предлагается кнопка «Заполнить по группе».
 function applyGroup(force = false) {
-  groupMatch = catalog ? inferFromGroup(value("group"), catalog, groupsData) : null;
-  const canApply = groupMatch && groupMatch.programs.length && (force || pickIsEmpty() || state.pick.byGroup);
+  groupMatch = catalog ? inferFromGroup(value("group"), catalog, groupsData, plansData) : null;
+  const plan = groupMatch?.plan;
+  const canApply = groupMatch && (plan || groupMatch.programs.length) && (force || pickIsEmpty() || state.pick.byGroup);
   if (canApply) {
     const { programs, departmentIds } = groupMatch;
     const instituteId = groupMatch.instituteId ?? "";
-    const departmentId = departmentIds.length === 1 && departmentIds[0] ? departmentIds[0] : "";
+    const departmentId = groupMatch.department?.id ??
+      (departmentIds.length === 1 && departmentIds[0] ? departmentIds[0] : "");
     const programId = programs.length === 1 ? programs[0].id : "";
     state.pick = { instituteId, departmentId, programId, byGroup: true };
     if (instituteId) suggest("institute", toGuillemets(catalog.institutes.find((i) => i.id === instituteId).name));
     if (departmentId) suggest("department", toGuillemets(catalog.departments.find((d) => d.id === departmentId).name));
+    else if (plan?.department) suggest("department", toGuillemets(plan.department));
     if (groupMatch.directions.length === 1) suggest("direction", groupMatch.directions[0]);
-    if (programId) suggest("profile", toGuillemets(programs[0].profile));
+    if (plan) suggest("profile", toGuillemets(plan.profile));
+    else if (programId) suggest("profile", toGuillemets(programs[0].profile));
   }
   fillPickers();
   renderGroupInfo(Boolean(canApply));
@@ -303,6 +314,8 @@ function renderGroupInfo(applied) {
   const institute = catalog.institutes.find((i) => i.id === groupMatch.instituteId)?.name;
   const facts = [institute, groupMatch.level.toLowerCase(), `набор ${groupMatch.year}`];
   if (groupMatch.directions.length === 1) facts.push(groupMatch.directions[0]);
+  const plan = groupMatch.plan;
+  if (plan) facts.push(plan.profile);
   const strong = document.createElement("strong");
   strong.textContent = `${groupMatch.name}: `;
   text.append(strong, facts.filter(Boolean).join(" · "));
@@ -311,7 +324,15 @@ function renderGroupInfo(applied) {
   const note = document.createElement("p");
   note.className = "hint";
   const n = groupMatch.programs.length;
-  if (!n) {
+  if (plan) {
+    const link = document.createElement("a");
+    link.href = plan.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "учебному плану";
+    const form = [plan.form.toLowerCase(), plan.distance ? "дистанционно" : ""].filter(Boolean).join(", ");
+    note.append(`Определено по `, link, ` (${form}; сейчас ${currentPeriod(plan).label}) — проверьте.`);
+  } else if (!n) {
     note.textContent = "Направление по номеру группы не определилось — выберите программу ниже.";
   } else if (n === 1) {
     note.textContent = "Программа заполнена по номеру группы — проверьте ниже.";
@@ -323,7 +344,7 @@ function renderGroupInfo(applied) {
   if (!groupMatch.known) note.textContent += " Группы нет в расписании ТГУ, институт подобран по буквам.";
   box.append(note);
 
-  if (n && !applied && !state.pick.byGroup) {
+  if ((n || plan) && !applied && !state.pick.byGroup) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Заполнить программу по группе";
@@ -338,8 +359,43 @@ function fillGroupList() {
 
 // ---------- подсказки по курсу и преподавателю ----------
 
+// Дисциплины учебного плана группы: текущего курса/семестра — кнопками под полем.
+function fillCourseSuggest() {
+  const box = $("course-suggest");
+  box.replaceChildren();
+  const plan = groupMatch?.plan;
+  const current = plan ? planDisciplines(plan).current : [];
+  if (!current.length) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const title = document.createElement("p");
+  title.className = "hint";
+  title.textContent = `По учебному плану группы ${groupMatch.name} на ${currentPeriod(plan).label}:`;
+  const list = document.createElement("div");
+  list.className = "chips";
+  const course = normalizeName(value("course"));
+  for (const name of current) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chip";
+    button.textContent = name;
+    button.setAttribute("aria-pressed", String(normalizeName(name) === course));
+    button.addEventListener("click", () => {
+      setValue("course", name);
+      changed();
+    });
+    list.append(button);
+  }
+  box.append(title, list);
+}
+
 function fillCourseList() {
-  const list = catalog?.disciplines?.[state.pick.programId] ?? [];
+  const plan = groupMatch?.plan;
+  const fromPlan = plan ? [...planDisciplines(plan).current, ...planDisciplines(plan).other] : [];
+  const fromCatalog = catalog?.disciplines?.[state.pick.programId] ?? [];
+  const list = [...new Set([...fromPlan, ...fromCatalog])];
   $("course-list").replaceChildren(...list.map((d) => option(d, "")));
   const hint = $("course-hint");
   const course = value("course").trim();
@@ -536,6 +592,7 @@ function changed() {
   renderPreview(data);
   renderMessages(data);
   fillCourseList();
+  fillCourseSuggest();
   fillTeacherList();
   fillTeacherSuggest();
   persist();
@@ -705,8 +762,9 @@ async function main() {
   fillPickers();
   changed();
   // Группы и преподаватели — дополнительные подсказки; без них сайт работает как обычно.
-  const [groupsResult, staffResult] = await Promise.allSettled([loadGroups(), loadStaff()]);
+  const [groupsResult, plansResult, staffResult] = await Promise.allSettled([loadGroups(), loadPlans(), loadStaff()]);
   groupsData = groupsResult.status === "fulfilled" ? groupsResult.value : null;
+  plansData = plansResult.status === "fulfilled" ? plansResult.value : null;
   staff = staffResult.status === "fulfilled" ? staffResult.value : null;
   fillGroupList();
   if (catalog && value("group")) applyGroup();

@@ -1,7 +1,10 @@
 // Собирает справочники с публичных страниц tltsu.ru:
 //   data/catalog.json — институты, подразделения, программы, дисциплины;
 //   data/staff.json   — преподаватели программ и их дисциплины («Педагогический состав»);
-//   data/groups.json  — номера групп с институтом и формой обучения (открытый API расписания).
+//   data/groups.json  — номера групп с институтом и формой обучения (открытый API расписания);
+//   data/plans.json   — учебные планы: профиль, кафедра и дисциплины по семестрам/курсам.
+// Номер группы (ЮРмд-2411а) совпадает с номером плана (z40.04.01_11_do1_2024) — так группа
+// связывается с профилем и дисциплинами (см. src/lib/group.js).
 // Запускается при сборке (GitHub Actions), не в браузере: у tltsu.ru закрыт CORS.
 //   node tools/update-catalog.mjs
 // При сбое сети или подозрительном результате завершается с ошибкой,
@@ -9,6 +12,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { parse } from "node-html-parser";
 import { normalizeName, programKey } from "../src/lib/format.js";
+import { parsePlanPdf } from "./plan-parser.mjs";
 
 const BASE = "https://www.tltsu.ru";
 const INDEX_URL = `${BASE}/education/institutions`;
@@ -17,10 +21,17 @@ const STAFF_INDEX_URL = `${BASE}/sveden/employees`;
 const STAFF_PREFIX = `${BASE}/sveden/direction/`;
 const GROUPS_API = "https://its.tltsu.ru/api/groups";
 const INSTITUTES_API = "https://its.tltsu.ru/api/institutes";
-const ALLOWED = [INDEX_URL, ALLOWED_PREFIX, STAFF_INDEX_URL, STAFF_PREFIX, GROUPS_API, INSTITUTES_API];
+const EDUCATION_URL = `${BASE}/sveden/education`;
+const PLAN_FILES_PREFIX = "https://files.tltsu.ru/education/opop/";
+const PLAN_YEARS_BACK = 6;
+// Разобранные планы берутся из прошлого data/plans.json по ссылке на PDF;
+// PLANS_REFRESH=1 — скачать и разобрать все заново.
+const PLANS_REFRESH = process.env.PLANS_REFRESH === "1";
+const ALLOWED = [INDEX_URL, ALLOWED_PREFIX, STAFF_INDEX_URL, STAFF_PREFIX, GROUPS_API, INSTITUTES_API, EDUCATION_URL, PLAN_FILES_PREFIX];
 const OUT = new URL("../data/catalog.json", import.meta.url).pathname;
 const STAFF_OUT = new URL("../data/staff.json", import.meta.url).pathname;
 const GROUPS_OUT = new URL("../data/groups.json", import.meta.url).pathname;
+const PLANS_OUT = new URL("../data/plans.json", import.meta.url).pathname;
 // Сокращения институтов в API расписания → идентификаторы каталога.
 const API_INSTITUTES = {
   "ИФЭиУ": "institut-finansov-ekonomiki-i-upravleniia",
@@ -243,11 +254,13 @@ async function main() {
   };
   const staff = await collectStaff(fetchedAt, institutes, departments);
   const groups = await collectGroups(fetchedAt, institutes);
+  const plans = await collectPlans(fetchedAt, institutes);
 
   const covered = programs.filter((p) => staff.programs[programKey(p.code, p.profile || p.direction)]).length;
   writeFileSync(OUT, JSON.stringify(catalog, null, 1) + "\n");
   writeFileSync(STAFF_OUT, JSON.stringify(staff, null, 1) + "\n");
   writeFileSync(GROUPS_OUT, JSON.stringify(groups, null, 1) + "\n");
+  writeFileSync(PLANS_OUT, JSON.stringify(plans, null, 1) + "\n");
   console.log(`Готово: ${institutes.length} институтов, ${departments.length} подразделений, ${programs.length} программ, ` +
     `дисциплины для ${Object.keys(disciplines).length} программ -> ${OUT}`);
   console.log(`Преподаватели: ${staff.people.length} человек, ${Object.keys(staff.programs).length} программ; ` +
@@ -372,6 +385,124 @@ async function collectProfiles(personUrls, institutes, departments) {
   const missing = urls.length - pages.filter(Boolean).length;
   console.log(`Личные страницы: ${urls.length} (не найдено ${missing}), с дисциплинами ${withDisciplines}, привязаны к институту ${linked}`);
   return profiles;
+}
+
+async function fetchBinary(url) {
+  if (!url.startsWith(PLAN_FILES_PREFIX)) throw new Error(`URL вне списка разрешённых: ${url}`);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = new Uint8Array(await res.arrayBuffer());
+      // Вместо отсутствующего файла сервер иногда отдаёт HTML-страницу.
+      return String.fromCharCode(...data.slice(0, 5)) === "%PDF-" ? data : null;
+    } catch (err) {
+      if (attempt >= 3) throw new Error(`${url}: ${err.message}`);
+      await sleep(2000 * attempt);
+    }
+  }
+}
+
+const LEVEL_BY_TEXT = [
+  [/бакалавриат/i, "Бакалавриат"], [/магистратур/i, "Магистратура"], [/специалитет/i, "Специалитет"],
+  [/аспирантур|научных и научно-педагогических/i, "Аспирантура"], [/среднее профессиональное|базовый уровень|углубл/i, "СПО"],
+];
+
+// Учебные планы из «Сведений об образовательной организации → Образование».
+// В таблице ОПОП: код, направление «(2024 г.н.)», уровень, профиль, форма, ссылка на PDF плана.
+async function collectPlans(fetchedAt, institutes) {
+  const root = required(await fetchPage(EDUCATION_URL), EDUCATION_URL);
+  const minYear = new Date().getFullYear() - PLAN_YEARS_BACK;
+  const rows = [];
+  const seen = new Set();
+  for (const tr of root.querySelectorAll("tr")) {
+    const link = tr.querySelector('td[itemprop="educationPlan"] a[href]')?.getAttribute("href");
+    if (!link) continue;
+    const cell = (prop) => clean(tr.querySelector(`td[itemprop="${prop}"]`)?.text ?? "");
+    const year = Number(cell("eduName").match(/\((\d{4}) г\.н\.\)/)?.[1]);
+    if (!year || year < minYear) continue;
+    const url = encodeURI(decodeURI(link));
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const levelText = cell("eduLevel");
+    const level = LEVEL_BY_TEXT.find(([re]) => re.test(levelText))?.[1] ?? levelText;
+    // Аспирантура: другой формат планов (научные специальности), титульные листы практик не нужны.
+    if (level === "Аспирантура") continue;
+    rows.push({ url, level });
+  }
+  if (rows.length < 50) throw new Error(`${EDUCATION_URL}: найдено учебных планов ${rows.length} — изменилась вёрстка?`);
+
+  const known = new Set(institutes.map((i) => i.id));
+  const cached = new Map();
+  if (!PLANS_REFRESH && existsSync(PLANS_OUT)) {
+    for (const plan of JSON.parse(readFileSync(PLANS_OUT, "utf8")).plans ?? []) cached.set(plan.url, plan);
+  }
+  const toFetch = rows.filter((row) => !cached.has(row.url));
+  console.log(`  учебные планы: ${rows.length}, из прошлого разбора ${rows.length - toFetch.length}, скачать ${toFetch.length}`);
+  let done = 0;
+  let failed = 0;
+  let missing = 0;
+  const parsed = await mapLimit(rows, CONCURRENCY, async (row) => {
+    const previous = cached.get(row.url);
+    if (previous) {
+      const { url, level, instituteId, disciplines, ...rest } = previous;
+      return { row, plan: { ...rest, disciplines: disciplines.map(([name, periods]) => ({ name, periods })) } };
+    }
+    try {
+      const data = await fetchBinary(row.url);
+      if (++done % 100 === 0 || done === toFetch.length) console.log(`  учебные планы: ${done}/${toFetch.length}`);
+      if (!data) {
+        missing++;
+        return null;
+      }
+      const plan = await parsePlanPdf(data);
+      if (!plan) throw new Error("не распознан идентификатор плана");
+      return { row, plan };
+    } catch (err) {
+      failed++;
+      console.warn(`  план не разобран: ${row.url}: ${err.message}`);
+      return null;
+    }
+  });
+  if (failed > Math.max(5, toFetch.length * 0.3)) throw new Error(`не разобрано ${failed} из ${toFetch.length} учебных планов`);
+
+  const plans = [];
+  const ids = new Set();
+  for (const item of parsed) {
+    if (!item || ids.has(item.plan.id)) continue;
+    ids.add(item.plan.id);
+    const { row, plan } = item;
+    const instituteId = API_INSTITUTES[plan.institute];
+    plans.push({
+      id: plan.id,
+      code: plan.code,
+      direction: plan.direction,
+      number: plan.number,
+      year: plan.year,
+      level: row.level,
+      formLetter: plan.formLetter,
+      distance: plan.distance,
+      form: plan.form,
+      profile: plan.profile,
+      department: plan.department,
+      institute: plan.institute,
+      instituteId: instituteId && known.has(instituteId) ? instituteId : null,
+      periodUnit: plan.periodUnit,
+      url: row.url,
+      disciplines: plan.disciplines.map((d) => [d.name, d.periods]),
+    });
+  }
+  plans.sort((a, b) => a.id.localeCompare(b.id));
+  if (existsSync(PLANS_OUT)) {
+    const prev = JSON.parse(readFileSync(PLANS_OUT, "utf8"));
+    if (prev.plans?.length && plans.length < prev.plans.length * MIN_SHARE_OF_PREVIOUS) {
+      throw new Error(`учебных планов стало ${plans.length}, было ${prev.plans.length} — результат не принят`);
+    }
+  }
+  console.log(`Учебные планы: ${plans.length} (скачано ${toFetch.length - failed - missing}, нет файла ${missing}, ` +
+    `не разобрано ${failed}), годы набора с ${minYear}`);
+  return { plansVersion: 1, fetchedAt, sources: [EDUCATION_URL], plans };
 }
 
 async function fetchJson(url) {
