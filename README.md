@@ -1,19 +1,46 @@
 # Генератор титульных листов ТГУ / Росдистант
 
-Статический сайт (GitHub Pages), который заполняет титульный лист практического задания и отдаёт готовый DOCX. Всё выполняется в браузере, персональные данные никуда не отправляются.
+Статический сайт на GitHub Pages: студент выбирает программу, вводит ФИО, группу, курс и номер задания и скачивает готовый титульный лист в DOCX по шаблону 2026 года.
 
-Статус: спецификация и шаблон готовы, интерфейса пока нет.
+**Сайт:** https://dremovd.github.io/rosdistant-title-page/
 
-- [`docs/SPEC.md`](docs/SPEC.md) — техническое задание (v1.1).
-- [`source/Титульный 2026.docx`](source/) — исходный образец, не изменяется.
-- [`template/title-template.docx`](template/) — шаблон с плейсхолдерами docxtemplater, собирается из исходника.
+- Всё выполняется в браузере: DOCX собирается локально, введённые данные никуда не отправляются.
+- ФИО, группа и программа запоминаются в `localStorage` этого браузера.
+- Справочник институтов, подразделений, программ и дисциплин собирается с открытых страниц tltsu.ru при сборке сайта (у tltsu.ru закрыт CORS, из браузера его не прочитать).
+- Любое подставленное значение можно исправить вручную.
+
+ТЗ: [`docs/SPEC.md`](docs/SPEC.md).
+
+## Структура
+
+| Путь | Что это |
+|---|---|
+| `source/Титульный 2026.docx` | Исходный образец, не изменяется |
+| `template/title-template.docx` | Шаблон с плейсхолдерами docxtemplater, собирается из исходника |
+| `data/catalog.json` | Справочник, собирается с tltsu.ru |
+| `src/` | Сайт: `index.html`, `app.js`, `styles.css`, `lib/` (форматирование, DOCX, хранилище) |
+| `tools/` | Сборка шаблона, справочника и сайта |
+| `tests/` | Тесты `node --test` |
+| `.github/workflows/` | Деплой на Pages и еженедельное обновление справочника |
+
+## Команды
+
+```sh
+npm ci
+npm test                 # тесты форматирования и заполнения DOCX
+npm run build            # сайт -> dist/ (имена ресурсов с хэшем)
+npm run serve            # http://localhost:8080 — локальный просмотр dist/
+npm run sample           # примеры DOCX -> out/ для сверки в Word/LibreOffice
+npm run update:catalog   # пересобрать data/catalog.json с tltsu.ru
+npm run build:template   # пересобрать шаблон из source/ (нужен python3)
+```
+
+## Деплой
+
+- Push в `main` → workflow **Deploy to GitHub Pages**: тесты, сборка, публикация `dist/`.
+- Workflow **Update catalog from tltsu.ru** — по понедельникам и вручную. Если справочник изменился (не только дата), коммитит его и запускает деплой. При сбое сети или резком сокращении числа программ падает, старый справочник остаётся.
+- В настройках репозитория: Pages → Source: **GitHub Actions**.
 
 ## Шаблон
 
-```sh
-npm install
-npm run build:template   # source/ -> template/title-template.docx
-npm run test:template    # заполняет тестовыми данными -> out/*.docx и проверяет результат
-```
-
-Теги шаблона: `{institute}`, `{department}`, `{direction}`, `{profile}`, `{assignmentNumber}`, `{course}`, `{variant}` (условный блок `{#variant}…{/variant}`), `{student}`, `{group}`, `{teacher}`, `{city}`, `{year}`, флаг `{#pageBreak}…{/pageBreak}`. Подробно — в разделе 3.2 ТЗ.
+Теги: `{institute}`, `{department}`, `{direction}`, `{profile}`, `{assignmentNumber}`, `{course}`, `{#variant}Вариант {variant}{/variant}`, `{student}`, `{group}`, `{teacher}`, `{city}`, `{year}`, `{#pageBreak}…{/pageBreak}`. Подробно — в разделе 3.2 ТЗ.

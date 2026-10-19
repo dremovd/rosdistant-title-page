@@ -2,12 +2,23 @@
   "name": "rosdistant-title-page",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build:template": "python3 tools/build_template.py",
-    "test:template": "node tools/render-sample.mjs"
+  "engines": {
+    "node": ">=20"
   },
-  "devDependencies": {
+  "scripts": {
+    "build": "node tools/build-site.mjs",
+    "build:template": "python3 tools/build_template.py",
+    "update:catalog": "node tools/update-catalog.mjs",
+    "test": "node --test tests/",
+    "sample": "node tools/render-sample.mjs",
+    "serve": "python3 -m http.server 8080 --directory dist"
+  },
+  "dependencies": {
     "docxtemplater": "3.60.0",
     "pizzip": "3.1.7"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "node-html-parser": "7.0.1"
   }
 }

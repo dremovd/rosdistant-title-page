@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ru" data-catalog="%CATALOG%" data-template="%TEMPLATE%" data-background="%BACKGROUND%">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="Заполните титульный лист практического задания ТГУ / Росдистант и скачайте DOCX. Данные не покидают браузер.">
+  <title>Титульный лист ТГУ</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="%STYLES%">
+  <script type="module" src="%APP%"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1>Титульный лист ТГУ / Росдистант</h1>
+      <p class="lead">Практические задания: заполните поля и скачайте готовый DOCX по шаблону 2026 года. Всё работает в вашем браузере, данные никуда не отправляются.</p>
+    </div>
+  </header>
+
+  <main class="wrap layout">
+    <form id="form" class="form" novalidate autocomplete="off">
+      <section class="card" aria-labelledby="h-program">
+        <div class="card-head">
+          <h2 id="h-program">Программа обучения</h2>
+          <span class="badge">запоминается</span>
+        </div>
+
+        <div class="grid">
+          <label class="field span-2">
+            <span class="label">Институт</span>
+            <select id="pick-institute"></select>
+          </label>
+          <label class="field span-2">
+            <span class="label">Подразделение</span>
+            <select id="pick-department"></select>
+          </label>
+          <label class="field span-2">
+            <span class="label">Направление и профиль</span>
+            <select id="pick-program"></select>
+            <span class="hint" id="program-source"></span>
+          </label>
+        </div>
+
+        <details class="printed" id="printed-program">
+          <summary>Как будет напечатано <span class="muted">— можно исправить</span></summary>
+          <div class="grid">
+            <label class="field span-2">
+              <span class="label">Институт <span class="muted">(полностью)</span></span>
+              <input id="institute" name="institute">
+            </label>
+            <label class="field span-2">
+              <span class="label">Подразделение</span>
+              <input id="department" name="department">
+            </label>
+            <label class="field span-2">
+              <span class="label">Код и направление подготовки</span>
+              <input id="direction" name="direction" placeholder="40.04.01 Юриспруденция">
+            </label>
+            <label class="field span-2">
+              <span class="label">Направленность (профиль)</span>
+              <input id="profile" name="profile">
+            </label>
+          </div>
+        </details>
+      </section>
+
+      <section class="card" aria-labelledby="h-student">
+        <div class="card-head">
+          <h2 id="h-student">Обучающийся</h2>
+          <span class="badge">запоминается</span>
+        </div>
+        <div class="grid">
+          <label class="field span-2">
+            <span class="label">ФИО полностью</span>
+            <input id="student-full" name="studentFull" placeholder="Иванова Анна Борисовна" autocomplete="name">
+          </label>
+          <label class="field">
+            <span class="label">На листе <span class="muted">(И.О. Фамилия)</span></span>
+            <input id="student" name="student" placeholder="А.Б. Иванова">
+          </label>
+          <label class="field">
+            <span class="label">Группа</span>
+            <input id="group" name="group" placeholder="ЮРмд-2401а">
+          </label>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-work">
+        <div class="card-head">
+          <h2 id="h-work">Работа</h2>
+        </div>
+        <div class="grid">
+          <label class="field span-2">
+            <span class="label">Учебный курс</span>
+            <input id="course" name="course" list="course-list" placeholder="Начните вводить или выберите из списка">
+            <datalist id="course-list"></datalist>
+            <span class="hint" id="course-hint"></span>
+          </label>
+          <label class="field">
+            <span class="label">№ практического задания</span>
+            <input id="assignment-number" name="assignmentNumber" placeholder="1">
+          </label>
+          <label class="field">
+            <span class="label">Вариант <span class="muted">(если есть)</span></span>
+            <input id="variant" name="variant">
+          </label>
+          <label class="field span-2">
+            <span class="label">Преподаватель — ФИО полностью или И.О. Фамилия</span>
+            <input id="teacher-full" name="teacherFull" list="teacher-list" placeholder="Смирнов Виктор Геннадьевич">
+            <datalist id="teacher-list"></datalist>
+          </label>
+          <label class="field">
+            <span class="label">На листе <span class="muted">(И.О. Фамилия)</span></span>
+            <input id="teacher" name="teacher" placeholder="В.Г. Смирнов">
+          </label>
+          <label class="field">
+            <span class="label">Год</span>
+            <input id="year" name="year" inputmode="numeric" maxlength="4">
+          </label>
+          <label class="check span-2">
+            <input type="checkbox" id="page-break" name="pageBreak">
+            <span>Добавить пустую вторую страницу для текста работы</span>
+          </label>
+        </div>
+        <p class="hint">Преподавателя, проверяющего вашу работу, смотрите в СДО — сайт его не угадывает.</p>
+      </section>
+
+      <section class="card actions" aria-label="Скачивание">
+        <ul id="messages" class="messages" aria-live="polite"></ul>
+        <label class="check" id="no-teacher-confirm" hidden>
+          <input type="checkbox" id="no-teacher">
+          <span>Скачать без преподавателя — впишу вручную</span>
+        </label>
+        <div class="buttons">
+          <button type="submit" class="primary" id="download">Скачать DOCX</button>
+          <button type="button" id="clear-work">Очистить работу</button>
+          <button type="button" id="reset-all" class="danger">Удалить все мои данные</button>
+        </div>
+        <p class="hint" id="save-status"></p>
+      </section>
+    </form>
+
+    <aside class="preview-col" aria-label="Предпросмотр">
+      <div class="preview-head">
+        <h2>Предпросмотр</h2>
+        <span class="muted">приблизительный — эталон вёрстки сам DOCX</span>
+      </div>
+      <div class="sheet-frame">
+        <div class="sheet" id="sheet" aria-hidden="true">
+          <img class="sheet-bg" id="sheet-bg" alt="">
+          <div class="sheet-body">
+            <p class="s-head">МИНИСТЕРСТВО НАУКИ И ВЫСШЕГО ОБРАЗОВАНИЯ РОССИЙСКОЙ ФЕДЕРАЦИИ</p>
+            <p class="s-12">федеральное государственное бюджетное образовательное учреждение высшего образования</p>
+            <p class="s-12">«Тольяттинский государственный университет»</p>
+            <p class="s-gap"></p>
+            <p class="s-line" data-preview="institute"></p>
+            <p class="s-cap">(наименование института полностью)</p>
+            <p class="s-line" data-preview="department"></p>
+            <p class="s-cap">(Наименование учебного структурного подразделения)</p>
+            <p class="s-line" data-preview="direction"></p>
+            <p class="s-cap">(код и наименование направления подготовки / специальности)</p>
+            <p class="s-line" data-preview="profile"></p>
+            <p class="s-cap">(направленность (профиль) / специализация)</p>
+            <p class="s-gap"></p>
+            <p class="s-title">ПРАКТИЧЕСКИЕ ЗАДАНИЯ № <span data-preview="assignmentNumber"></span></p>
+            <p class="s-gap-sm"></p>
+            <p class="s-14">по учебному курсу <u>«<span data-preview="course"></span>»</u></p>
+            <p class="s-cap s-cap-gap">(наименование учебного курса)</p>
+            <p class="s-14" id="preview-variant">Вариант <span data-preview="variant"></span></p>
+            <div class="s-people">
+              <span>Обучающегося</span><span class="s-val" data-preview="student"></span>
+              <span></span><span class="s-cap">(И.О. Фамилия)</span>
+              <span>Группа</span><span class="s-val" data-preview="group"></span>
+              <span></span><span></span>
+              <span>Преподаватель</span><span class="s-val" data-preview="teacher"></span>
+              <span></span><span class="s-cap">(И.О. Фамилия)</span>
+            </div>
+            <p class="s-city"><span data-preview="city"></span> <span data-preview="year"></span></p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="wrap site-footer">
+    <p id="catalog-info"></p>
+    <p>Справочник собирается с открытых страниц <a href="https://www.tltsu.ru/education/institutions" rel="noopener noreferrer" target="_blank">tltsu.ru</a>. Сайт не связан с ТГУ официально. Введённые данные хранятся только в этом браузере.
+      <a href="https://github.com/dremovd/rosdistant-title-page" rel="noopener noreferrer" target="_blank">Исходный код</a>.</p>
+  </footer>
+</body>
+</html>
