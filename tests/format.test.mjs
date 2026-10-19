@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  cleanText, fileNameFor, isValidYear, overflowRisk, plural, stripOuterQuotes, templateData, toGuillemets, toInitials, validate,
+  cleanText, fileNameFor, isValidYear, normalizeName, overflowRisk, plural, programKey, stripOuterQuotes, templateData, toGuillemets, toInitials, validate,
 } from "../src/lib/format.js";
 
 test("toInitials: полное ФИО", () => {
@@ -33,6 +33,11 @@ test("кавычки: ёлочки и снятие внешних кавычек
 
 test("cleanText убирает управляющие символы и переводы строк", () => {
   assert.equal(cleanText("a\u0000b\u0007\n c\t"), "ab c");
+});
+
+test("normalizeName и programKey сводят написания с разных страниц", () => {
+  assert.equal(normalizeName(" Гражданское  право «Ёлки» "), "гражданское право елки");
+  assert.equal(programKey("40.04.01", "Гражданское право и процесс"), programKey(" 40.04.01", "гражданское право  и процесс"));
 });
 
 test("plural", () => {

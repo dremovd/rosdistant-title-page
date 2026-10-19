@@ -1,5 +1,7 @@
 import { renderTitle } from "./lib/docx.js";
-import { fileNameFor, isValidYear, plural, templateData, toGuillemets, toInitials, validate } from "./lib/format.js";
+import {
+  fileNameFor, isValidYear, normalizeName, plural, programKey, templateData, toGuillemets, toInitials, validate,
+} from "./lib/format.js";
 import { clearState, loadState, saveState } from "./lib/storage.js";
 
 const $ = (id) => document.getElementById(id);
@@ -28,6 +30,7 @@ const assets = document.documentElement.dataset;
 const assetUrl = (path) => new URL(path, document.baseURI);
 
 let catalog = null;
+let staff = null;
 let templatePromise = null;
 let attemptedDownload = false;
 let state = {
@@ -46,11 +49,21 @@ function setValue(key, text) {
 
 // ---------- справочник ----------
 
-async function loadCatalog() {
-  const res = await fetch(assetUrl(assets.catalog), { credentials: "omit" });
+async function loadJson(path) {
+  const res = await fetch(assetUrl(path), { credentials: "omit" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
+  return res.json();
+}
+
+async function loadCatalog() {
+  const data = await loadJson(assets.catalog);
   if (!Array.isArray(data.programs) || !data.programs.length) throw new Error("пустой справочник");
+  return data;
+}
+
+async function loadStaff() {
+  const data = await loadJson(assets.staff);
+  if (!Array.isArray(data.people) || !data.programs) throw new Error("пустой список преподавателей");
   return data;
 }
 
@@ -248,8 +261,71 @@ function fillCourseList() {
   }
 }
 
+// Преподаватели выбранной программы из «Педагогического состава» tltsu.ru.
+function programStaff() {
+  const program = currentProgram();
+  if (!staff || !program) return null;
+  const entry = staff.programs[programKey(program.code, program.profile || program.direction)];
+  if (!entry) return null;
+  const people = entry.staff.map(([index, disciplines]) => {
+    const [name, post] = staff.people[index];
+    return { name, post, disciplines };
+  });
+  return { url: entry.url, people };
+}
+
 function fillTeacherList() {
-  $("teacher-list").replaceChildren(...state.teachers.map((t) => option(t, "")));
+  const names = [...state.teachers];
+  for (const p of programStaff()?.people ?? []) if (!names.includes(p.name)) names.push(p.name);
+  $("teacher-list").replaceChildren(...names.map((t) => option(t, "")));
+}
+
+// Подсказка, а не назначение (ТЗ §4.3 п.6): ничего не подставляем сами,
+// показываем кнопки, по которым пользователь выбирает преподавателя.
+function fillTeacherSuggest() {
+  const box = $("teacher-suggest");
+  box.replaceChildren();
+  const found = programStaff();
+  const course = normalizeName(value("course"));
+  if (!found || !course) {
+    box.hidden = true;
+    return;
+  }
+  const matching = found.people.filter((p) => p.disciplines.some((d) => normalizeName(d) === course));
+  box.hidden = false;
+  const title = document.createElement("p");
+  title.className = "hint";
+  const source = document.createElement("a");
+  source.href = found.url;
+  source.target = "_blank";
+  source.rel = "noopener noreferrer";
+  source.textContent = "tltsu.ru";
+  if (!matching.length) {
+    title.append("Преподаватели этого курса в вашей программе не найдены на ", source,
+      ". Список всех преподавателей программы — в подсказках поля.");
+    box.append(title);
+    return;
+  }
+  title.append(matching.length === 1
+    ? "По данным "
+    : `Курс в вашей программе ведут ${plural(matching.length, ["преподаватель", "преподавателя", "преподавателей"])} по данным `,
+  source, matching.length === 1 ? " курс ведёт:" : ". Выберите своего:");
+  const list = document.createElement("div");
+  list.className = "chips";
+  for (const person of matching) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chip";
+    button.textContent = `${toInitials(person.name)}${person.post ? ` — ${person.post.toLowerCase()}` : ""}`;
+    button.title = person.name;
+    button.addEventListener("click", () => {
+      setValue("teacherFull", person.name);
+      suggest("teacher", toInitials(person.name));
+      changed();
+    });
+    list.append(button);
+  }
+  box.append(title, list);
 }
 
 // ---------- предпросмотр и сообщения ----------
@@ -328,6 +404,8 @@ function changed() {
   renderPreview(data);
   renderMessages(data);
   fillCourseList();
+  fillTeacherList();
+  fillTeacherSuggest();
   persist();
 }
 
@@ -486,6 +564,14 @@ async function main() {
   if (!state.pick.instituteId && (value("institute") || value("direction"))) $("printed-program").open = true;
   fillPickers();
   changed();
+  // Список преподавателей — дополнительная подсказка; без него сайт работает как обычно.
+  try {
+    staff = await loadStaff();
+    fillTeacherList();
+    fillTeacherSuggest();
+  } catch {
+    staff = null;
+  }
 }
 
 main();

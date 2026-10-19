@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru" data-catalog="%CATALOG%" data-template="%TEMPLATE%" data-background="%BACKGROUND%">
+<html lang="ru" data-catalog="%CATALOG%" data-template="%TEMPLATE%" data-background="%BACKGROUND%" data-staff="%STAFF%">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -111,6 +111,7 @@
             <input id="teacher-full" name="teacherFull" list="teacher-list" placeholder="Смирнов Виктор Геннадьевич">
             <datalist id="teacher-list"></datalist>
           </label>
+          <div class="teacher-suggest span-2" id="teacher-suggest" hidden></div>
           <label class="field">
             <span class="label">На листе <span class="muted">(И.О. Фамилия)</span></span>
             <input id="teacher" name="teacher" placeholder="В.Г. Смирнов">
@@ -124,7 +125,7 @@
             <span>Добавить пустую вторую страницу для текста работы</span>
           </label>
         </div>
-        <p class="hint">Преподавателя, проверяющего вашу работу, смотрите в СДО — сайт его не угадывает.</p>
+        <p class="hint">Подсказки преподавателей — из открытого раздела «Педагогический состав» tltsu.ru. Это не назначение проверяющего: кто проверяет вашу работу, смотрите в СДО.</p>
       </section>
 
       <section class="card actions" aria-label="Скачивание">

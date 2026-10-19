@@ -39,7 +39,9 @@ const css = await build({
 
 const template = readFileSync(path("template/title-template.docx"));
 const background = new PizZip(template).file("word/media/image1.jpeg").asUint8Array();
-const catalog = JSON.stringify(JSON.parse(readFileSync(path("data/catalog.json"), "utf8")));
+const minJson = (p) => JSON.stringify(JSON.parse(readFileSync(path(p), "utf8")));
+const catalog = minJson("data/catalog.json");
+const staff = minJson("data/staff.json");
 
 const files = {
   "%APP%": hashed("app", "js", js.outputFiles[0].contents),
@@ -47,6 +49,7 @@ const files = {
   "%TEMPLATE%": hashed("title-template", "docx", template),
   "%CATALOG%": hashed("catalog", "json", catalog),
   "%BACKGROUND%": hashed("background", "jpg", background),
+  "%STAFF%": hashed("staff", "json", staff),
 };
 
 let html = readFileSync(path("src/index.html"), "utf8");

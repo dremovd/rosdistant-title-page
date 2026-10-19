@@ -61,6 +61,21 @@ export function toInitials(fullName) {
   return initials ? `${initials} ${surname}` : text;
 }
 
+// Сравнение названий из разных разделов tltsu.ru: регистр, ё, кавычки, пробелы.
+export function normalizeName(value) {
+  return cleanText(value)
+    .toLocaleLowerCase("ru")
+    .replace(/ё/g, "е")
+    .replace(/[«»„“”"']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Ключ программы для связи каталога и «Педагогического состава»: код + профиль.
+export function programKey(code, profile) {
+  return `${cleanText(code)}|${normalizeName(profile)}`;
+}
+
 // plural(5, ["программа", "программы", "программ"]) → "5 программ"
 export function plural(n, [one, few, many]) {
   const mod10 = n % 10;

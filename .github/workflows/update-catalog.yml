@@ -28,11 +28,16 @@ jobs:
       - id: diff
         name: Изменилось ли что-то кроме даты загрузки
         run: |
-          git show HEAD:data/catalog.json > /tmp/old.json
           if node -e '
             const fs = require("fs");
-            const strip = (f) => { const c = JSON.parse(fs.readFileSync(f, "utf8")); delete c.fetchedAt; return JSON.stringify(c); };
-            process.exit(strip("/tmp/old.json") === strip("data/catalog.json") ? 0 : 1);
+            const { execSync } = require("child_process");
+            const strip = (text) => { const c = JSON.parse(text); delete c.fetchedAt; return JSON.stringify(c); };
+            const same = (f) => {
+              let old = "";
+              try { old = execSync(`git show HEAD:${f}`, { encoding: "utf8", maxBuffer: 1 << 26 }); } catch { return false; }
+              return strip(old) === strip(fs.readFileSync(f, "utf8"));
+            };
+            process.exit(same("data/catalog.json") && same("data/staff.json") ? 0 : 1);
           '; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -45,8 +50,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/catalog.json
-          git commit -m "Обновление справочника с tltsu.ru"
+          git add data/catalog.json data/staff.json
+          git commit -m "Обновление справочников с tltsu.ru"
           git push
           # Пуш от GITHUB_TOKEN не запускает другие workflow — запускаем деплой явно.
           gh workflow run deploy.yml --ref main

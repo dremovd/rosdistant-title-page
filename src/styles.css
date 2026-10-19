@@ -146,6 +146,24 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
 }
 .suggest button { padding: 3px 10px; font-size: 0.8125rem; }
 
+.teacher-suggest[hidden] { display: none; }
+.teacher-suggest {
+  display: grid;
+  gap: 8px;
+  background: var(--accent-soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.teacher-suggest .hint { color: var(--text); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.875rem;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
 
 button {
