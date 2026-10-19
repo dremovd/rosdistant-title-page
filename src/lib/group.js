@@ -92,15 +92,16 @@ export function parseGroup(value, groups = null) {
   return null;
 }
 
-// Учебный план группы: тот же год набора, номер, уровень и институт; затем —
-// дистанционность, форма и похожесть префикса на направление. Каждый шаг сужает
+// Учебный план группы: тот же год набора, номер, уровень и институт, а префикс группы
+// обязательно похож на направление (иначе ЮРмп-2507а «находит» Машиностроение с тем же
+// номером). Затем дистанционность, форма и лучший балл префикса — каждый шаг сужает
 // список, только если что-то остаётся.
 // Планы направлений с одним профилем без номера — запасной вариант, если по номеру ничего нет.
 export function matchPlan(parsed, plans, instituteId) {
   if (!parsed || !plans?.length) return { plan: null, candidates: [] };
   const base = plans.filter((p) => p.year === parsed.year && p.level === parsed.level &&
     (!instituteId || !p.instituteId || p.instituteId === instituteId));
-  let list = base.filter((p) => p.number === parsed.number);
+  let list = base.filter((p) => p.number === parsed.number && scoreDirection(parsed.prefix, p.direction) > 0);
   if (!list.length) {
     list = base.filter((p) => p.number === null && scoreDirection(parsed.prefix, p.direction) >= 3);
   }

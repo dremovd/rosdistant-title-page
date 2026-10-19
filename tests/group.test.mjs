@@ -115,3 +115,14 @@ test("inferFromGroup принимает номер в любом виде и в�
   assert.equal(r.name, "ЮРмд-2406а");
   assert.equal(r.known, true);
 });
+
+test("matchPlan: план чужого направления с тем же номером не подходит", () => {
+  const mixed = [
+    plan({ id: "15.04.01_07_2025_3++", code: "15.04.01", direction: "Машиностроение", number: "07", year: 2025,
+      distance: false, formLetter: "", institute: "", instituteId: null, profile: "Цифровые двойники" }),
+    plan({ id: "z40.04.01_07_do1_2025_3++", number: "07", year: 2025, profile: "Правовое обеспечение предпринимательской деятельности" }),
+  ];
+  const r = matchPlan(parseGroup("ЮРмп-2507а"), mixed, "law");
+  assert.equal(r.plan.id, "z40.04.01_07_do1_2025_3++");
+  assert.equal(matchPlan(parseGroup("ЮРмп-2507а"), [mixed[0]], "law").plan, null);
+});

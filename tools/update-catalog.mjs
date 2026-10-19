@@ -473,7 +473,9 @@ async function collectPlans(fetchedAt, institutes) {
     if (!item || ids.has(item.plan.id)) continue;
     ids.add(item.plan.id);
     const { row, plan } = item;
-    const instituteId = API_INSTITUTES[plan.institute];
+    // В шапке плана институт бывает сокращением («ИнПр»), полным названием или пустым.
+    const instituteId = API_INSTITUTES[plan.institute] ??
+      institutes.find((i) => normalizeName(i.name) === normalizeName(plan.institute))?.id;
     plans.push({
       id: plan.id,
       code: plan.code,
