@@ -42,6 +42,7 @@ const background = new PizZip(template).file("word/media/image1.jpeg").asUint8Ar
 const minJson = (p) => JSON.stringify(JSON.parse(readFileSync(path(p), "utf8")));
 const catalog = minJson("data/catalog.json");
 const staff = minJson("data/staff.json");
+const groups = minJson("data/groups.json");
 
 const files = {
   "%APP%": hashed("app", "js", js.outputFiles[0].contents),
@@ -50,6 +51,7 @@ const files = {
   "%CATALOG%": hashed("catalog", "json", catalog),
   "%BACKGROUND%": hashed("background", "jpg", background),
   "%STAFF%": hashed("staff", "json", staff),
+  "%GROUPS%": hashed("groups", "json", groups),
 };
 
 let html = readFileSync(path("src/index.html"), "utf8");

@@ -37,7 +37,7 @@ jobs:
               try { old = execSync(`git show HEAD:${f}`, { encoding: "utf8", maxBuffer: 1 << 26 }); } catch { return false; }
               return strip(old) === strip(fs.readFileSync(f, "utf8"));
             };
-            process.exit(same("data/catalog.json") && same("data/staff.json") ? 0 : 1);
+            process.exit(["catalog", "staff", "groups"].every((n) => same(`data/${n}.json`)) ? 0 : 1);
           '; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -50,7 +50,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/catalog.json data/staff.json
+          git add data/catalog.json data/staff.json data/groups.json
           git commit -m "Обновление справочников с tltsu.ru"
           git push
           # Пуш от GITHUB_TOKEN не запускает другие workflow — запускаем деплой явно.

@@ -1,22 +1,39 @@
 // Собирает справочники с публичных страниц tltsu.ru:
 //   data/catalog.json — институты, подразделения, программы, дисциплины;
-//   data/staff.json   — преподаватели программ и их дисциплины («Педагогический состав»).
+//   data/staff.json   — преподаватели программ и их дисциплины («Педагогический состав»);
+//   data/groups.json  — номера групп с институтом и формой обучения (открытый API расписания).
 // Запускается при сборке (GitHub Actions), не в браузере: у tltsu.ru закрыт CORS.
 //   node tools/update-catalog.mjs
 // При сбое сети или подозрительном результате завершается с ошибкой,
 // не трогая существующие файлы (ТЗ §4.4).
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { parse } from "node-html-parser";
-import { programKey } from "../src/lib/format.js";
+import { normalizeName, programKey } from "../src/lib/format.js";
 
 const BASE = "https://www.tltsu.ru";
 const INDEX_URL = `${BASE}/education/institutions`;
 const ALLOWED_PREFIX = `${BASE}/education/institutions/`;
 const STAFF_INDEX_URL = `${BASE}/sveden/employees`;
 const STAFF_PREFIX = `${BASE}/sveden/direction/`;
-const ALLOWED = [INDEX_URL, ALLOWED_PREFIX, STAFF_INDEX_URL, STAFF_PREFIX];
+const GROUPS_API = "https://its.tltsu.ru/api/groups";
+const INSTITUTES_API = "https://its.tltsu.ru/api/institutes";
+const ALLOWED = [INDEX_URL, ALLOWED_PREFIX, STAFF_INDEX_URL, STAFF_PREFIX, GROUPS_API, INSTITUTES_API];
 const OUT = new URL("../data/catalog.json", import.meta.url).pathname;
 const STAFF_OUT = new URL("../data/staff.json", import.meta.url).pathname;
+const GROUPS_OUT = new URL("../data/groups.json", import.meta.url).pathname;
+// Сокращения институтов в API расписания → идентификаторы каталога.
+const API_INSTITUTES = {
+  "ИФЭиУ": "institut-finansov-ekonomiki-i-upravleniia",
+  "ГумПИ": "gumanitarno-pedagogiceskii-institut",
+  "ИнПр": "institut-prava",
+  "ИФКиС": "institut-fiziceskoi-kultury-i-sporta",
+  "ИИиЭБ": "institut-inzenernoi-i-ekologiceskoi-bezopasnosti",
+  "ИОП": "institut-obshheinzenernoi-podgotovki",
+  "ИЦТ": "institut-cifrovyx-texnologii",
+  "ИМХиЭ": "institut-masinostroeniia-ximii-i-energetiki",
+  "ИБАиБМС": "institut-bespilotnoi-aviacii-i-bespilotnyx-mobilnyx-sistem",
+  "ИКИСиА": "institut-kreativnyx-industrii-stroitelstva-i-arxitektury",
+};
 const PARSER_VERSION = 2;
 const TIMEOUT_MS = 90_000;
 const MIN_SHARE_OF_PREVIOUS = 0.7;
@@ -40,6 +57,7 @@ async function mapLimit(items, limit, fn) {
   return results;
 }
 
+// null — страница не найдена (404); вызывающий решает, критично ли это.
 async function fetchPage(url) {
   if (!ALLOWED.some((prefix) => url === prefix || url.startsWith(prefix))) throw new Error(`URL вне списка разрешённых: ${url}`);
   for (let attempt = 1; ; attempt++) {
@@ -48,6 +66,7 @@ async function fetchPage(url) {
         signal: AbortSignal.timeout(TIMEOUT_MS),
         headers: { "User-Agent": "rosdistant-title-page catalog builder (+https://github.com/dremovd/rosdistant-title-page)" },
       });
+      if (res.status === 404) return null;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return parse(await res.text());
     } catch (err) {
@@ -55,6 +74,11 @@ async function fetchPage(url) {
       await sleep(2000 * attempt);
     }
   }
+}
+
+function required(root, url) {
+  if (!root) throw new Error(`${url}: HTTP 404`);
+  return root;
 }
 
 const slugOf = (url) => url.slice(ALLOWED_PREFIX.length).replace(/\/+$/, "");
@@ -142,7 +166,7 @@ async function main() {
   const programs = [];
   const disciplines = {};
 
-  const index = await fetchPage(INDEX_URL);
+  const index = required(await fetchPage(INDEX_URL), INDEX_URL);
   const instituteUrls = childLinks(index, INDEX_URL);
   if (instituteUrls.length < 3) throw new Error(`найдено институтов: ${instituteUrls.length} — изменилась вёрстка?`);
 
@@ -160,12 +184,12 @@ async function main() {
     return found.length;
   }
 
-  const instRoots = await mapLimit(instituteUrls, CONCURRENCY, fetchPage);
+  const instRoots = await mapLimit(instituteUrls, CONCURRENCY, async (url) => required(await fetchPage(url), url));
   const depLists = instituteUrls.map((url, i) => childLinks(instRoots[i], url));
   const depUrlsAll = depLists.flat();
   let done = 0;
   const depRootsAll = await mapLimit(depUrlsAll, CONCURRENCY, async (url) => {
-    const root = await fetchPage(url);
+    const root = required(await fetchPage(url), url);
     console.log(`  [${++done}/${depUrlsAll.length}] ${slugOf(url)}`);
     return root;
   });
@@ -217,11 +241,13 @@ async function main() {
     programs,
     disciplines,
   };
-  const staff = await collectStaff(fetchedAt);
+  const staff = await collectStaff(fetchedAt, institutes, departments);
+  const groups = await collectGroups(fetchedAt, institutes);
 
   const covered = programs.filter((p) => staff.programs[programKey(p.code, p.profile || p.direction)]).length;
   writeFileSync(OUT, JSON.stringify(catalog, null, 1) + "\n");
   writeFileSync(STAFF_OUT, JSON.stringify(staff, null, 1) + "\n");
+  writeFileSync(GROUPS_OUT, JSON.stringify(groups, null, 1) + "\n");
   console.log(`Готово: ${institutes.length} институтов, ${departments.length} подразделений, ${programs.length} программ, ` +
     `дисциплины для ${Object.keys(disciplines).length} программ -> ${OUT}`);
   console.log(`Преподаватели: ${staff.people.length} человек, ${Object.keys(staff.programs).length} программ; ` +
@@ -231,8 +257,8 @@ async function main() {
 // «Педагогический состав»: таблица программ со ссылками на страницы
 // «Информация о составе педагогических работников образовательной программы».
 // Сохраняем только ФИО, должность и дисциплины в этой программе — без контактов.
-async function collectStaff(fetchedAt) {
-  const index = await fetchPage(STAFF_INDEX_URL);
+async function collectStaff(fetchedAt, institutes, departments) {
+  const index = required(await fetchPage(STAFF_INDEX_URL), STAFF_INDEX_URL);
   const rows = [];
   for (const tr of index.querySelectorAll("table tbody tr")) {
     const cells = tr.querySelectorAll("td").map((td) => clean(td.text));
@@ -245,6 +271,7 @@ async function collectStaff(fetchedAt) {
 
   const people = [];
   const personIndex = new Map();
+  const personUrls = [];
   const result = {};
   const seenUrls = new Set();
   const unique = rows.filter((row) => {
@@ -257,7 +284,7 @@ async function collectStaff(fetchedAt) {
   });
   let done = 0;
   const roots = await mapLimit(unique, CONCURRENCY, async (row) => {
-    const root = await fetchPage(row.url);
+    const root = required(await fetchPage(row.url), row.url);
     console.log(`  [${++done}/${unique.length}] ${row.code} ${row.profile}`);
     return root;
   });
@@ -274,7 +301,8 @@ async function collectStaff(fetchedAt) {
       const fioCell = tr.querySelector('td[itemprop="fio"]');
       const name = clean(fioCell?.text ?? "");
       if (!name) continue;
-      const id = fioCell.querySelector("a")?.getAttribute("href")?.split("/").pop() || name;
+      const href = fioCell.querySelector("a")?.getAttribute("href") ?? "";
+      const id = href.split("/").pop() || name;
       const post = clean(tr.querySelector('td[itemprop="post"]')?.text ?? "");
       const list = (tr.querySelector('td[itemprop="teachingDiscipline"]')?.querySelectorAll("li") ?? [])
         .map((li) => clean(li.text))
@@ -282,6 +310,7 @@ async function collectStaff(fetchedAt) {
       if (!personIndex.has(id)) {
         personIndex.set(id, people.length);
         people.push([name, post]);
+        personUrls.push(href.startsWith(`${STAFF_INDEX_URL}/`) ? href : null);
       }
       staff.push([personIndex.get(id), [...new Set(list)]]);
     }
@@ -297,7 +326,93 @@ async function collectStaff(fetchedAt) {
       throw new Error(`записей о преподавателях стало ${total}, было ${prevTotal} — результат не принят`);
     }
   }
-  return { staffVersion: 1, parserVersion: PARSER_VERSION, fetchedAt, sources: [STAFF_INDEX_URL], people, programs: result };
+  const profiles = await collectProfiles(personUrls, institutes, departments);
+  return {
+    staffVersion: 2, parserVersion: PARSER_VERSION, fetchedAt, sources: [STAFF_INDEX_URL],
+    people, profiles, programs: result,
+  };
+}
+
+// Личные страницы преподавателей: подразделение и полный список дисциплин.
+// Нужны, когда в таблице программы преподаватель курса не указан.
+// Сохраняем только привязку к институту/подразделению и дисциплины — без контактов.
+// profiles[i] = [instituteIds, departmentIds, disciplines] для people[i].
+async function collectProfiles(personUrls, institutes, departments) {
+  const urls = personUrls.filter(Boolean);
+  let done = 0;
+  const pages = await mapLimit(personUrls, CONCURRENCY, async (url) => {
+    if (!url) return null;
+    const root = await fetchPage(url);
+    if (++done % 50 === 0 || done === urls.length) console.log(`  личные страницы: ${done}/${urls.length}`);
+    return root;
+  });
+
+  const instituteNames = institutes.map((i) => [i.id, normalizeName(i.name)]);
+  const departmentNames = departments.map((d) => [d.id, normalizeName(d.name)]);
+  let withDisciplines = 0;
+  const profiles = pages.map((root) => {
+    if (!root) return [[], [], []];
+    const unitLabel = root.querySelectorAll("div").find((d) => clean(d.text) === "Подразделение" && !d.querySelector("div"));
+    const unit = normalizeName(unitLabel?.nextElementSibling?.text ?? "");
+    const heading = root.querySelectorAll("h2").find((h) => clean(h.text) === "Дисциплины");
+    const disciplines = heading
+      ? [...new Set(heading.parentNode.querySelectorAll("li").map((li) => clean(li.text)).filter(Boolean))]
+      : [];
+    if (disciplines.length) withDisciplines++;
+    return [
+      instituteNames.filter(([, name]) => unit.includes(name)).map(([id]) => id),
+      departmentNames.filter(([, name]) => unit.includes(name)).map(([id]) => id),
+      disciplines,
+    ];
+  });
+  if (urls.length && withDisciplines < urls.length * 0.3) {
+    throw new Error(`дисциплины найдены только на ${withDisciplines} из ${urls.length} личных страниц — изменилась вёрстка?`);
+  }
+  const linked = profiles.filter(([inst]) => inst.length).length;
+  const missing = urls.length - pages.filter(Boolean).length;
+  console.log(`Личные страницы: ${urls.length} (не найдено ${missing}), с дисциплинами ${withDisciplines}, привязаны к институту ${linked}`);
+  return profiles;
+}
+
+async function fetchJson(url) {
+  if (!ALLOWED.includes(url)) throw new Error(`URL вне списка разрешённых: ${url}`);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      if (attempt >= 3) throw new Error(`${url}: ${err.message}`);
+      await sleep(2000 * attempt);
+    }
+  }
+}
+
+// Открытый API расписания (rasp.tltsu.ru). Берём только номер группы, институт
+// и признак формы обучения; списков студентов там нет и мы их не запрашиваем.
+async function collectGroups(fetchedAt, institutes) {
+  const [apiInstitutes, apiGroups] = await Promise.all([fetchJson(INSTITUTES_API), fetchJson(GROUPS_API)]);
+  const known = new Set(institutes.map((i) => i.id));
+  for (const inst of apiInstitutes) {
+    const id = API_INSTITUTES[inst.name];
+    if (!id || !known.has(id)) console.warn(`  институт API расписания «${inst.name}» не сопоставлен с каталогом`);
+  }
+  const groups = apiGroups
+    .filter((g) => typeof g.name === "string" && g.name.trim())
+    .map((g) => {
+      const id = API_INSTITUTES[g.institute?.name];
+      return [clean(g.name), id && known.has(id) ? id : null, g.eduform ?? null];
+    })
+    .sort((a, b) => a[0].localeCompare(b[0], "ru"));
+  if (groups.length < 100) throw new Error(`групп в API расписания: ${groups.length} — что-то не так`);
+  if (existsSync(GROUPS_OUT)) {
+    const prev = JSON.parse(readFileSync(GROUPS_OUT, "utf8"));
+    if (prev.groups?.length && groups.length < prev.groups.length * MIN_SHARE_OF_PREVIOUS) {
+      throw new Error(`групп стало ${groups.length}, было ${prev.groups.length} — результат не принят`);
+    }
+  }
+  console.log(`Группы: ${groups.length}, с институтом ${groups.filter((g) => g[1]).length}`);
+  return { groupsVersion: 1, fetchedAt, sources: [GROUPS_API], groups };
 }
 
 main().catch((err) => {

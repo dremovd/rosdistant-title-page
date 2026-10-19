@@ -146,15 +146,17 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
 }
 .suggest button { padding: 3px 10px; font-size: 0.8125rem; }
 
-.teacher-suggest[hidden] { display: none; }
-.teacher-suggest {
+.teacher-suggest[hidden], .group-info[hidden] { display: none; }
+.group-info p { margin: 0; font-size: 0.9375rem; }
+.group-info button { justify-self: start; padding: 6px 14px; }
+.teacher-suggest, .group-info {
   display: grid;
   gap: 8px;
   background: var(--accent-soft);
   border-radius: 8px;
   padding: 10px 12px;
 }
-.teacher-suggest .hint { color: var(--text); }
+.teacher-suggest .hint, .group-info .hint { color: var(--text); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
   border-radius: 999px;

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru" data-catalog="%CATALOG%" data-template="%TEMPLATE%" data-background="%BACKGROUND%" data-staff="%STAFF%">
+<html lang="ru" data-catalog="%CATALOG%" data-template="%TEMPLATE%" data-background="%BACKGROUND%" data-staff="%STAFF%" data-groups="%GROUPS%">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,6 +21,29 @@
 
   <main class="wrap layout">
     <form id="form" class="form" novalidate autocomplete="off">
+      <section class="card" aria-labelledby="h-student">
+        <div class="card-head">
+          <h2 id="h-student">Обучающийся</h2>
+          <span class="badge">запоминается</span>
+        </div>
+        <div class="grid">
+          <label class="field">
+            <span class="label">Группа</span>
+            <input id="group" name="group" list="group-list" placeholder="ЮРмд-2406а" autocapitalize="off" spellcheck="false">
+            <datalist id="group-list"></datalist>
+          </label>
+          <label class="field">
+            <span class="label">ФИО полностью</span>
+            <input id="student-full" name="studentFull" placeholder="Иванова Анна Борисовна" autocomplete="name">
+          </label>
+          <div class="group-info span-2" id="group-info" hidden></div>
+          <label class="field span-2">
+            <span class="label">На листе <span class="muted">(И.О. Фамилия)</span></span>
+            <input id="student" name="student" placeholder="А.Б. Иванова">
+          </label>
+        </div>
+      </section>
+
       <section class="card" aria-labelledby="h-program">
         <div class="card-head">
           <h2 id="h-program">Программа обучения</h2>
@@ -66,27 +89,6 @@
         </details>
       </section>
 
-      <section class="card" aria-labelledby="h-student">
-        <div class="card-head">
-          <h2 id="h-student">Обучающийся</h2>
-          <span class="badge">запоминается</span>
-        </div>
-        <div class="grid">
-          <label class="field span-2">
-            <span class="label">ФИО полностью</span>
-            <input id="student-full" name="studentFull" placeholder="Иванова Анна Борисовна" autocomplete="name">
-          </label>
-          <label class="field">
-            <span class="label">На листе <span class="muted">(И.О. Фамилия)</span></span>
-            <input id="student" name="student" placeholder="А.Б. Иванова">
-          </label>
-          <label class="field">
-            <span class="label">Группа</span>
-            <input id="group" name="group" placeholder="ЮРмд-2401а">
-          </label>
-        </div>
-      </section>
-
       <section class="card" aria-labelledby="h-work">
         <div class="card-head">
           <h2 id="h-work">Работа</h2>
@@ -121,7 +123,7 @@
             <input id="year" name="year" inputmode="numeric" maxlength="4">
           </label>
           <label class="check span-2">
-            <input type="checkbox" id="page-break" name="pageBreak">
+            <input type="checkbox" id="page-break" name="pageBreak" checked>
             <span>Добавить пустую вторую страницу для текста работы</span>
           </label>
         </div>
