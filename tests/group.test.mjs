@@ -18,7 +18,7 @@ const groups = { groups: [["ЮРмд-2406а", "law", 2], ["ПСХмвд-2404а",
 
 test("parseGroup: уровень, префикс, год набора", () => {
   assert.deepEqual(parseGroup("ЮРмд-2406а"), {
-    name: "ЮРмд-2406а", prefix: "ЮР", level: "Магистратура", year: 2024, number: "06", distance: true, formLetter: "z",
+    name: "ЮРмд-2406а", prefix: "ЮР", level: "Магистратура", year: 2024, number: "06", distance: true, semesterLag: 1, formLetter: "z",
   });
   assert.equal(parseGroup("ПСХмвд-2404а").formLetter, "v");
   assert.equal(parseGroup("ЮРб-2402а").formLetter, "");
@@ -135,4 +135,17 @@ test("курс и семестр можно задать вручную (сдв�
   assert.deepEqual([currentPeriod(p, oct2026, override).course, currentPeriod(p, oct2026, override).semester], [2, 4]);
   assert.deepEqual(planDisciplines(p, oct2026, override).current, ["Проблемы семейного права"]);
   assert.equal(planCourses(p), 3);
+});
+
+test("группы «д» и «вд» отстают на семестр, «до» — нет", () => {
+  assert.equal(parseGroup("ПИНЖбд-2401а").semesterLag, 1);
+  assert.equal(parseGroup("ПСХмвд-2404а").semesterLag, 1);
+  assert.equal(parseGroup("ТБмдо-2512а").semesterLag, 0);
+  assert.equal(parseGroup("ЮРб-2402а").semesterLag, 0);
+  const oct2026 = new Date(2026, 9, 20);
+  const sem = plan({ periodUnit: "semester" });
+  assert.deepEqual([currentPeriod(sem, oct2026, null, 1).course, currentPeriod(sem, oct2026, null, 1).semester], [2, 4]);
+  assert.equal(currentPeriod(plan(), oct2026, null, 1).course, 2);
+  assert.equal(currentPeriod(plan(), new Date(2026, 3, 1), null, 1).course, 2);
+  assert.equal(currentPeriod(plan({ year: 2026 }), oct2026, null, 1).semester, 1);
 });

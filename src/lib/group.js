@@ -53,6 +53,9 @@ function fromParts(prefix, level, flags, yy, nn, sub) {
     year: 2000 + Number(yy),
     number: nn,
     distance: flags.includes("д"),
+    // Группы «…д-» и «…вд-» (без «о») по расписанию ТГУ идут на семестр позже года набора:
+    // осенью 2026 ПИНЖбд-2401а на 4-м семестре, а не на 5-м. Группы «…до-» идут по году набора.
+    semesterLag: flags.includes("д") && !flags.includes("о") ? 1 : 0,
     // Буква формы в имени плана: v — очно-заочная, z — заочная, "" — очная.
     formLetter: flags.includes("в") ? "v" : /[дп]/.test(flags) ? "z" : "",
   };
@@ -124,14 +127,13 @@ export function planCourses(plan) {
   return plan.periodUnit === "course" ? max : Math.ceil(max / 2);
 }
 
-// Текущий курс и семестр по году набора (учебный год с 1 сентября).
-// У Росдистанта отсчёт бывает сдвинут относительно года набора (весенний старт),
-// поэтому пользователь может задать курс и семестр сам — override.
-export function currentPeriod(plan, date = new Date(), override = null) {
+// Текущий курс и семестр по году набора (учебный год с 1 сентября) минус lag семестров
+// (см. semesterLag). Пользователь может задать курс и семестр сам — override.
+export function currentPeriod(plan, date = new Date(), override = null, lag = 0) {
   const month = date.getMonth();
   const startYear = month >= 8 ? date.getFullYear() : date.getFullYear() - 1;
-  let course = startYear - plan.year + 1;
-  let semester = (course - 1) * 2 + (month >= 8 || month === 0 ? 1 : 2);
+  let semester = Math.max(1, (startYear - plan.year) * 2 + (month >= 8 || month === 0 ? 1 : 2) - lag);
+  let course = Math.ceil(semester / 2);
   if (override?.course) {
     course = override.course;
     semester = override.semester ?? (course - 1) * 2 + 1;
@@ -142,8 +144,8 @@ export function currentPeriod(plan, date = new Date(), override = null) {
 }
 
 // Дисциплины плана: сначала текущего периода, затем остальные.
-export function planDisciplines(plan, date = new Date(), override = null) {
-  const { period } = currentPeriod(plan, date, override);
+export function planDisciplines(plan, date = new Date(), override = null, lag = 0) {
+  const { period } = currentPeriod(plan, date, override, lag);
   const current = plan.disciplines.filter(([, periods]) => periods.includes(period)).map(([name]) => name);
   const other = plan.disciplines.map(([name]) => name).filter((name) => !current.includes(name));
   return { current, other };
@@ -204,6 +206,7 @@ export function inferFromGroup(value, catalog, groups, plans = null) {
       instituteId: plan.instituteId ?? instituteId ?? programs[0]?.instituteId ?? null,
       level: parsed.level,
       year: parsed.year,
+      semesterLag: parsed.semesterLag,
       plan,
       department: departments.length === 1 ? departments[0] : null,
       programs,
@@ -230,6 +233,7 @@ export function inferFromGroup(value, catalog, groups, plans = null) {
     instituteId: instituteId ?? (unique(programs.map((p) => p.instituteId)).length === 1 ? programs[0].instituteId : null),
     level: parsed.level,
     year: parsed.year,
+    semesterLag: parsed.semesterLag,
     plan: null,
     department: null,
     programs,

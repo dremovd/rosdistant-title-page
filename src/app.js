@@ -363,7 +363,7 @@ function periodOverride() {
 }
 
 function periodPicker(plan) {
-  const now = currentPeriod(plan, new Date(), periodOverride());
+  const now = currentPeriod(plan, new Date(), periodOverride(), groupMatch?.semesterLag);
   const wrap = document.createElement("div");
   wrap.className = "period";
   const label = document.createElement("span");
@@ -391,7 +391,7 @@ function periodPicker(plan) {
   semesterSelect.addEventListener("change", save);
   const hint = document.createElement("span");
   hint.className = "muted";
-  hint.textContent = periodOverride() ? "задано вами" : "по году набора — исправьте, если не так";
+  hint.textContent = periodOverride() ? "задано вами" : groupMatch?.semesterLag ? "по году набора со сдвигом на семестр, как у групп Росдистанта, — исправьте, если не так" : "по году набора — исправьте, если не так";
   wrap.append(label, courseSelect, semesterSelect, hint);
   return wrap;
 }
@@ -407,7 +407,7 @@ function fillCourseSuggest() {
   const box = $("course-suggest");
   box.replaceChildren();
   const plan = groupMatch?.plan;
-  const current = plan ? planDisciplines(plan, new Date(), periodOverride()).current : [];
+  const current = plan ? planDisciplines(plan, new Date(), periodOverride(), groupMatch?.semesterLag).current : [];
   if (!current.length) {
     box.hidden = true;
     return;
@@ -415,7 +415,7 @@ function fillCourseSuggest() {
   box.hidden = false;
   const title = document.createElement("p");
   title.className = "hint";
-  title.textContent = `По учебному плану группы ${groupMatch.name} на ${currentPeriod(plan, new Date(), periodOverride()).label}:`;
+  title.textContent = `По учебному плану группы ${groupMatch.name} на ${currentPeriod(plan, new Date(), periodOverride(), groupMatch?.semesterLag).label}:`;
   const list = document.createElement("div");
   list.className = "chips";
   const course = normalizeName(value("course"));
@@ -436,7 +436,7 @@ function fillCourseSuggest() {
 
 function fillCourseList() {
   const plan = groupMatch?.plan;
-  const split = plan ? planDisciplines(plan, new Date(), periodOverride()) : null;
+  const split = plan ? planDisciplines(plan, new Date(), periodOverride(), groupMatch?.semesterLag) : null;
   const fromPlan = split ? [...split.current, ...split.other] : [];
   const fromCatalog = catalog?.disciplines?.[state.pick.programId] ?? [];
   const list = [...new Set([...fromPlan, ...fromCatalog])];
