@@ -1,6 +1,6 @@
 {
  "groupsVersion": 1,
- "fetchedAt": "2026-10-19T21:12:37.789Z",
+ "fetchedAt": "2026-10-26T08:58:02.348Z",
  "sources": [
   "https://its.tltsu.ru/api/groups"
  ],
@@ -3422,6 +3422,11 @@
   ],
   [
    "ТБбп-2507а",
+   "institut-inzenernoi-i-ekologiceskoi-bezopasnosti",
+   2
+  ],
+  [
+   "ТБбп-2507б",
    "institut-inzenernoi-i-ekologiceskoi-bezopasnosti",
    2
   ],
