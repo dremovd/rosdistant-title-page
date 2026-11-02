@@ -1,7 +1,7 @@
 {
  "catalogVersion": 1,
  "parserVersion": 2,
- "fetchedAt": "2026-10-26T08:58:02.348Z",
+ "fetchedAt": "2026-11-02T11:11:30.110Z",
  "sources": [
   "https://www.tltsu.ru/education/institutions"
  ],
@@ -1014,6 +1014,17 @@
    "code": "45.04.01",
    "direction": "Филология",
    "profile": "Лингвистическая экспертиза",
+   "form": "Заочная",
+   "sourceUrl": "https://www.tltsu.ru/education/institutions/gumanitarno-pedagogiceskii-institut/kafedra-filologiia-lingvoekspertologiia-i-mediakommunikacii"
+  },
+  {
+   "id": "gumanitarno-pedagogiceskii-institut/kafedra-filologiia-lingvoekspertologiia-i-mediakommunikacii|42.04.02|Журналистика и цифровые коммуникации (Заочная)",
+   "instituteId": "gumanitarno-pedagogiceskii-institut",
+   "departmentId": "gumanitarno-pedagogiceskii-institut/kafedra-filologiia-lingvoekspertologiia-i-mediakommunikacii",
+   "level": "Магистратура",
+   "code": "42.04.02",
+   "direction": "Журналистика",
+   "profile": "Журналистика и цифровые коммуникации",
    "form": "Заочная",
    "sourceUrl": "https://www.tltsu.ru/education/institutions/gumanitarno-pedagogiceskii-institut/kafedra-filologiia-lingvoekspertologiia-i-mediakommunikacii"
   },
@@ -4820,6 +4831,28 @@
    "Теория и практика лингвистической экспертизы",
    "Филология в системе современного гуманитарного знания",
    "Экспертный подход к анализу спорных текстов"
+  ],
+  "gumanitarno-pedagogiceskii-institut/kafedra-filologiia-lingvoekspertologiia-i-mediakommunikacii|42.04.02|Журналистика и цифровые коммуникации (Заочная)": [
+   "Академический английский язык",
+   "Актуальные проблемы современности и журналистика",
+   "Алгоритмы и программирование на основе Python (спецкурс)",
+   "Аналитическая работа журналиста",
+   "Жанры и форматы медиатекста",
+   "Медиадизайн",
+   "Медиапсихология",
+   "Медиатекст в системе корпоративных коммуникаций",
+   "Медиаэкономика",
+   "Методология и методика исследований журналистики и медиа",
+   "Основы прикладной статистики",
+   "Открытые данные как источник информации",
+   "Предпринимательская деятельность. Организация и управление работой команды",
+   "Предпринимательская деятельность. Системный подход в управлении проектами",
+   "Предпринимательская деятельность. Стратегическое управление проектной деятельностью",
+   "Профессиональная культура журналиста цифровых медиа",
+   "Системный подход к научно-исследовательской работе",
+   "Сторителлинг как формат медиатекста",
+   "Технологии прикладного анализа данных",
+   "Технологии продвижения медиаконтента"
   ],
   "institut-cifrovyx-texnologii/departament-bakalavriata|01.03.02|Компьютерные технологии и математическое моделирование (Очная)": [
    "Алгоритмы и структуры данных",
